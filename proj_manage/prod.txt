@@ -1,0 +1,234 @@
+<?php
+session_start();
+
+// Redirect to login if not authenticated
+if (!isset($_SESSION['username'])) {
+    header("Location: login.php");
+    exit;
+}
+
+// Database connection
+$servername = "localhost";
+$username = "root";
+$password = "";
+$dbname = "stock_management"; // Your database name
+
+$conn = new mysqli($servername, $username, $password, $dbname);
+
+if ($conn->connect_error) {
+    die("Connection failed: " . $conn->connect_error);
+}
+
+// Handle form submission for adding new product
+if ($_SERVER["REQUEST_METHOD"] == "POST" && isset($_POST['add_product'])) {
+    $item_name = $_POST['item_name'];
+    $insert_sql = "INSERT INTO inventory (item_name) VALUES ('$item_name')";
+    if ($conn->query($insert_sql) === TRUE) {
+        echo "New product added successfully.";
+    } else {
+        echo "Error: " . $conn->error;
+    }
+}
+
+// Handle product removal
+if (isset($_GET['remove_id'])) {
+    $remove_id = $_GET['remove_id'];
+    $delete_sql = "DELETE FROM inventory WHERE id = $remove_id";
+    if ($conn->query($delete_sql) === TRUE) {
+        echo "Product removed successfully.";
+    } else {
+        echo "Error: " . $conn->error;
+    }
+}
+
+// Fetch all products from inventory
+$sql = "SELECT id, item_name, quantity FROM inventory";
+$result = $conn->query($sql);
+?>
+
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Manage Products</title>
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0-beta3/css/all.min.css" rel="stylesheet">
+    <style>
+        /* Basic styling */
+        body {
+            font-family: Arial, sans-serif;
+            margin: 0;
+            padding: 0;
+            display: flex;
+            height: 100vh;
+            background-color: #f4f4f4;
+        }
+
+        .sidebar {
+            width: 200px;
+            background-color: #333;
+            color: white;
+            padding: 15px;
+            height: 100%;
+            position: fixed;
+            top: 0;
+            left: 0;
+        }
+
+        .content {
+            margin-left: 220px;
+            padding: 20px;
+            width: calc(100% - 220px);
+        }
+
+        .product-table {
+            width: 100%;
+            border-collapse: collapse;
+            margin-top: 20px;
+        }
+
+        .product-table th, .product-table td {
+            padding: 10px;
+            text-align: center;
+            border: 1px solid #ddd;
+        }
+
+        .product-table th {
+            background-color: #4CAF50;
+            color: white;
+        }
+
+        .product-table td button {
+            padding: 5px 10px;
+            background-color: #4CAF50;
+            color: white;
+            border: none;
+            cursor: pointer;
+        }
+
+        /* Modal styling */
+        .modal {
+            display: none;
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background-color: rgba(0, 0, 0, 0.7);
+            z-index: 1000;
+            justify-content: center;
+            align-items: center;
+        }
+
+        .modal-content {
+            background-color: white;
+            padding: 20px;
+            border-radius: 10px;
+            width: 50%;
+            box-shadow: 0px 0px 10px rgba(0, 0, 0, 0.5);
+            text-align: center;
+        }
+
+        .modal-content form {
+            display: flex;
+            flex-direction: column;
+        }
+
+        .modal-content input, .modal-content textarea, .modal-content button {
+            margin: 10px 0;
+            padding: 10px;
+            border-radius: 5px;
+            border: 1px solid #ddd;
+        }
+
+        .modal-content button {
+            background-color: #4CAF50;
+            color: white;
+            border: none;
+            cursor: pointer;
+        }
+
+        .modal-content button:hover {
+            background-color: #45a049;
+        }
+
+        .modal-close {
+            position: absolute;
+            top: 10px;
+            right: 15px;
+            font-size: 20px;
+            font-weight: bold;
+            cursor: pointer;
+        }
+    </style>
+</head>
+<body>
+
+<div class="sidebar">
+    <h2>Stock Management</h2>
+</div>
+
+<div class="content">
+    <h1>Manage Products</h1>
+
+    <table class="product-table">
+        <tr>
+            <th>Item Name</th>
+            <th>Quantity</th>
+            <th>Actions</th>
+        </tr>
+
+        <?php
+        if ($result->num_rows > 0) {
+            while ($row = $result->fetch_assoc()) {
+                echo "<tr>
+                        <td>" . $row['item_name'] . "</td>
+                        <td>" . $row['quantity'] . "</td>
+                        <td>
+                            <button onclick='openModal(" . $row['id'] . ", \"" . $row['item_name'] . "\", \"" . $row['quantity'] . "\")'>Edit</button>
+                            <a href='products.php?remove_id=" . $row['id'] . "'><button>Remove</button></a>
+                        </td>
+                    </tr>";
+            }
+        } else {
+            echo "<tr><td colspan='3'>No products found</td></tr>";
+        }
+        ?>
+    </table>
+</div>
+
+<!-- Modal -->
+<div id="editModal" class="modal">
+    <div class="modal-content">
+        <span class="modal-close" onclick="closeModal()">&times;</span>
+        <h2>Edit Product</h2>
+        <form id="editForm" method="POST" action="products.php">
+            <input type="hidden" name="edit_id" id="editId">
+            <label for="item_name">Item Name</label>
+            <input type="text" name="item_name" id="editName" required>
+            <label for="quantity">Quantity</label>
+            <input type="number" name="quantity" id="editQuantity" required>
+            <button type="submit">Save Changes</button>
+        </form>
+    </div>
+</div>
+
+<script>
+    function openModal(id, name, quantity) {
+        document.getElementById('editId').value = id;
+        document.getElementById('editName').value = name;
+        document.getElementById('editQuantity').value = quantity;
+        document.getElementById('editModal').style.display = 'flex';
+    }
+
+    function closeModal() {
+        document.getElementById('editModal').style.display = 'none';
+    }
+</script>
+
+</body>
+</html>
+
+<?php
+$conn->close();
+?>
